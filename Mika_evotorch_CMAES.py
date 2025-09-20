@@ -102,6 +102,9 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
     # Choose activation function
     act_fn = tanh if activation == "tanh" else sigmoid
 
+    # For recording velocity
+    positions = []
+
     # Simulation loop
     for t in range(steps):
         # Normalize qpos inputs
@@ -123,10 +126,12 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
         # Apply controls
         data.ctrl[:] = ctrl_state
         mj_step(model, data)
+        
+        positions.append(to_track[0].xpos[1])
 
-    # Fitness = final y-position
+    # Fitness = final y-position 
     final_y = to_track[0].xpos[1]
-    return final_y
+    return final_y, np.array(positions)
 
 
 # -----------------------
@@ -135,7 +140,8 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
 def evaluate_factory(steps: int = SIMULATION_STEPS, activation: str = "tanh"):
     """Return an evaluation function configured with activation type."""
     def evaluate(genome: torch.Tensor) -> float:
-        return run_simulation(genome, steps=steps, activation=activation)
+        final_y, _ = run_simulation(genome, steps=steps, activation=activation)
+        return final_y
     return evaluate
 
 

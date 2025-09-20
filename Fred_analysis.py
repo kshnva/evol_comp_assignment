@@ -38,3 +38,19 @@ def plot_average_sig_tanh(histories_tanh: np.ndarray, histories_sigmoid: np.ndar
     ax.legend()
     ax.grid(True)
     return fig
+
+
+def plot_velocity(traj_tanh: np.ndarray, traj_sigmoid: np.ndarray, step: int = 10):
+    """Plots velocity (dy per step) sampled every `step` timesteps."""
+    velocity_tanh = np.diff(traj_tanh)[::step]
+    velocity_sigmoid = np.diff(traj_sigmoid)[::step]
+
+    fig, ax = plt.subplots(figsize=(8,5))
+    ax.plot(velocity_tanh, label=f"Tanh velocity (every {step} steps)", color='red', alpha=0.7)
+    ax.plot(velocity_sigmoid, label=f"Sigmoid velocity (every {step} steps)", color='blue', alpha=0.7)
+    ax.set_xlabel('Sampled timestep')
+    ax.set_ylabel('dY per step (velocity)')
+    ax.set_title('Velocity Comparison')
+    ax.legend()
+    ax.grid(True)
+    return fig

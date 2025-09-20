@@ -8,8 +8,8 @@ import Fred_analysis
 
 if __name__ == "__main__":
     runs = 5
-    generations = 50
-    steps = 20000
+    generations = 5
+    steps = 2
     show_plots = True  # Toggle to show plots
 
     tanh_histories = []
@@ -36,8 +36,6 @@ if __name__ == "__main__":
         tanh_histories.append(fitness_history)
 
     tanh_total = time.time() - tanh_start
-    print(f"[tanh] All {runs} runs took {tanh_total:.2f} seconds "
-          f"(avg {np.mean(tanh_durations):.2f} sec/run)")
 
     # Run sigmoid experiments
     sigmoid_durations = []
@@ -57,8 +55,6 @@ if __name__ == "__main__":
         sigmoid_histories.append(fitness_history)
 
     sigmoid_total = time.time() - sigmoid_start
-    print(f"[sigmoid] All {runs} runs took {sigmoid_total:.2f} seconds "
-          f"(avg {np.mean(sigmoid_durations):.2f} sec/run)")
 
     # Convert to arrays
     tanh_histories = np.array(tanh_histories)
@@ -70,9 +66,9 @@ if __name__ == "__main__":
     fig3 = Fred_analysis.plot_average_sig_tanh(tanh_histories, sigmoid_histories)
 
     # Save plots
-    fig1.savefig("results/tanh_individual_runs.png")
-    fig2.savefig("results/sigmoid_individual_runs.png")
-    fig3.savefig("results/tanh_vs_sigmoid_average.png")
+    fig1.savefig(f"results/tanh_individual_runs_gens{generations}_ste{steps}.png")
+    fig2.savefig(f"results/sigmoid_individual_runs_gens{generations}_ste{steps}.png")
+    fig3.savefig(f"results/tanh_vs_sigmoid_average_gens{generations}_ste{steps}.png")
 
     # Optional: Show plots
     if show_plots:
@@ -80,5 +76,11 @@ if __name__ == "__main__":
         plt.show()
 
     # Display the total time
+    print(f"All {runs} tanh runs took {tanh_total:.2f} seconds "
+          f"(avg run: {np.mean(tanh_durations):.2f} sec/run)")
+    
+    print(f"All {runs} sigmoid runs took {sigmoid_total:.2f} seconds "
+          f"(avg run: {np.mean(sigmoid_durations):.2f} sec/run)")
+
     total_time = time.time() - total_start
     print(f"All experiments completed in {total_time:.2f} seconds")

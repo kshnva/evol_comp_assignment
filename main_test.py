@@ -1,7 +1,9 @@
-# main_experiment.py
+# This module runs as main for Mika's CMAES evotorch functions
+
 import numpy as np
 from Mika_evotorch_time import run_evolution
-import Fred_analysis  # this imports your analysis functions
+import Fred_analysis
+
 
 if __name__ == "__main__":
     runs = 5
@@ -36,11 +38,6 @@ if __name__ == "__main__":
     # Convert to arrays
     tanh_histories = np.array(tanh_histories)
     sigmoid_histories = np.array(sigmoid_histories)
-
-    # Save results
-    np.save("tanh_histories.npy", tanh_histories)
-    np.save("sigmoid_histories.npy", sigmoid_histories)
-    print("Saved tanh_histories.npy and sigmoid_histories.npy")
 
     # Run analysis immediately
     #Fred_analysis.plot_individual_runs(tanh_histories, "Tanh")

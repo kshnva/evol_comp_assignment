@@ -2,14 +2,14 @@
 
 import numpy as np
 import time
-from Mika_evotorch_time import run_evolution
+from Mika_evotorch_CMAES import run_evolution
 import Fred_analysis
 
 
 if __name__ == "__main__":
     runs = 5
-    generations = 5
-    steps = 2
+    generations = 50
+    steps = 2000
     show_plots = True  # Toggle to show plots
 
     tanh_histories = []

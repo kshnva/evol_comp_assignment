@@ -167,7 +167,7 @@ def run_evolution(
         searcher.step()
         best_fit = searcher.status["best_eval"]
         fitness_history.append(best_fit)
-        print(f"Gen {gen} | Best Y: {best_fit:.4f}")
+        #print(f"Gen {gen} | Best Y: {best_fit:.4f}")
 
     best_genome = searcher.status["best"].values
     return best_genome, fitness_history

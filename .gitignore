@@ -1,6 +1,9 @@
 # Ariel
 ariel/
 
+# Results
+results/
+
 # System files
 .DS_Store
 

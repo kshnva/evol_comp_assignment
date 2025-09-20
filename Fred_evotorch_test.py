@@ -16,7 +16,7 @@ from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
 # Ideas/TO DO
 # 1. Change NN -> Output structure for downstream useage the same
-
+# Current: forward
 
 # Use this function for main functions (NOT RUNNING evaluations)
 def main():

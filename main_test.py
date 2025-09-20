@@ -42,8 +42,11 @@ if __name__ == "__main__":
 
         # Check if better fitness for velocity run
         if best_tanh_fitness is None or final_fitness > best_tanh_fitness:
+            print("better run")
             best_tanh_fitness = final_fitness
             best_tanh_genome = genome
+        else:
+            print('run not better')
 
     tanh_total = time.time() - tanh_start
 

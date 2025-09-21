@@ -1,10 +1,11 @@
 # This module runs as main for Mika's CMAES evotorch functions
 
 import numpy as np
-import random
 import time
-from Mika_evotorch_CMAES import run_evolution, run_simulation
+import torch
 import Fred_analysis
+
+from Mika_evotorch_CMAES import run_evolution, run_simulation, run_best_genome
 
 # Turn off evotorch spam messages
 import logging
@@ -14,7 +15,7 @@ logging.getLogger("evotorch").setLevel(logging.WARNING)
 if __name__ == "__main__":
     runs = 3
     generations = 10
-    steps = 500
+    steps = 200
     vel_step = 20 # Every ... steps to record velocity (too small will not show)
     show_plots = True  # Toggle to show plots
 
@@ -45,21 +46,20 @@ if __name__ == "__main__":
         tanh_histories.append(fitness_history)
         final_fitness = fitness_history[-1]
 
-        # Check if better fitness for velocity run
+        # Select best genome
         if best_tanh_fitness is None or final_fitness > best_tanh_fitness:
-            print("better run")
             best_tanh_fitness = final_fitness
             best_tanh_genome = genome
-        else:
-            print('run not better')
 
     tanh_total = time.time() - tanh_start
 
     # Select the best tanh run for velocity
+    if best_tanh_genome is None:
+        raise RuntimeError("No valid tanh genome found")
     _, best_tanh_traj = run_simulation(
-    genome=best_tanh_genome,
-    steps=steps,
-    activation="tanh")
+        genome=best_tanh_genome,
+        steps=steps,
+        activation="tanh")
     np.save("results/best_tanh_traj.npy", best_tanh_traj)
 
     # Run sigmoid experiments
@@ -83,7 +83,7 @@ if __name__ == "__main__":
         sigmoid_histories.append(fitness_history)
         final_fitness = fitness_history[-1]
 
-        # Check if better fitness for velocity run
+        # Select best genome
         if best_sigmoid_fitness is None or final_fitness > best_sigmoid_fitness:
             best_sigmoid_fitness = final_fitness
             best_sigmoid_genome = genome
@@ -91,11 +91,12 @@ if __name__ == "__main__":
     sigmoid_total = time.time() - sigmoid_start
 
     # Select the best sigmoid run for velocity
+    if best_sigmoid_genome is None:
+        raise RuntimeError("No valid sigmoid genome found")
     _, best_sigmoid_traj = run_simulation(
-    genome=best_sigmoid_genome,
-    steps=steps,
-    activation="sigmoid")
-    
+        genome=best_sigmoid_genome,
+        steps=steps,
+        activation="sigmoid")
     np.save("results/best_sigmoid_traj.npy", best_sigmoid_traj)
 
     # Convert to arrays
@@ -131,3 +132,17 @@ if __name__ == "__main__":
 
     total_time = time.time() - total_start
     print(f"All experiments completed in {total_time:.2f} seconds")
+
+    # -----------------------
+    # Visualization prompt
+    # -----------------------
+    choice = input("Visualize best genome? (tanh/sigmoid/none): ").strip().lower()
+
+    if choice == "tanh":
+        print("Launching MuJoCo viewer with best tanh genome...")
+        run_best_genome(best_tanh_genome, activation="tanh")
+    elif choice == "sigmoid":
+        print("Launching MuJoCo viewer with best sigmoid genome...")
+        run_best_genome(best_sigmoid_genome, activation="sigmoid")
+    else:
+        print("Skipping visualization.")

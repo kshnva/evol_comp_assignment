@@ -1,15 +1,25 @@
 # This module runs as main for Mika's CMAES evotorch functions
 
 import numpy as np
+import random
 import time
 from Mika_evotorch_CMAES import run_evolution, run_simulation
 import Fred_analysis
 
+# Turn off evotorch spam messages
+import logging
+logging.getLogger("evotorch").setLevel(logging.WARNING)
+
+#Test speed
+SEED = 42
+np.random.seed(SEED)
+random.seed(SEED)
+
 
 if __name__ == "__main__":
-    runs = 5
-    generations = 50
-    steps = 20000
+    runs = 3
+    generations = 10
+    steps = 500
     vel_step = 20 # Every ... steps to record velocity (too small will not show)
     show_plots = True  # Toggle to show plots
 

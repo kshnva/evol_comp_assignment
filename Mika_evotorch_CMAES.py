@@ -16,6 +16,9 @@ from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
 
+#Test speed
+torch.manual_seed(42)
+
 # -----------------------
 # Network architecture
 # -----------------------
@@ -40,13 +43,16 @@ MAX_ANGLE = np.pi / 2     # actuator limits
 
 def decode_genome(genome: torch.Tensor):
     """Decode genome into input, recurrent, and output weights."""
+    # call numpy earlier to avoid 3x. Put into CPU for handling
+    g = genome.detach().cpu().numpy()
+    
     idx = 0
-    W_in = genome[idx: idx + INPUT_SIZE*HIDDEN_SIZE].reshape(INPUT_SIZE, HIDDEN_SIZE)
+    W_in = g[idx: idx + INPUT_SIZE*HIDDEN_SIZE].reshape(INPUT_SIZE, HIDDEN_SIZE)
     idx += INPUT_SIZE*HIDDEN_SIZE
-    W_rec = genome[idx: idx + HIDDEN_SIZE*HIDDEN_SIZE].reshape(HIDDEN_SIZE, HIDDEN_SIZE)
+    W_rec = g[idx: idx + HIDDEN_SIZE*HIDDEN_SIZE].reshape(HIDDEN_SIZE, HIDDEN_SIZE)
     idx += HIDDEN_SIZE*HIDDEN_SIZE
-    W_out = genome[idx: idx + HIDDEN_SIZE*OUTPUT_SIZE].reshape(HIDDEN_SIZE, OUTPUT_SIZE)
-    return W_in.numpy(), W_rec.numpy(), W_out.numpy()
+    W_out = g[idx: idx + HIDDEN_SIZE*OUTPUT_SIZE].reshape(HIDDEN_SIZE, OUTPUT_SIZE)
+    return W_in, W_rec, W_out
 
 
 # -----------------------
@@ -103,18 +109,20 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
     act_fn = tanh if activation == "tanh" else sigmoid
 
     # For recording velocity
-    positions = []
+    positions = np.empty(steps)
+
+    # Preallocate input buffer instead of concatinate
+    inputs = np.empty(INPUT_SIZE)
 
     # Simulation loop
     for t in range(steps):
         # Normalize qpos inputs
-        q_inputs = normalize_inputs(data.qpos)
+        inputs[:BASE_INPUT_SIZE] = normalize_inputs(data.qpos)
 
         # Add time features
         phase = 2 * np.pi * (t / steps)   # normalized time
-        time_inputs = np.array([np.sin(phase), np.cos(phase)])
-
-        inputs = np.concatenate([q_inputs, time_inputs])
+        inputs[BASE_INPUT_SIZE] = np.sin(phase)
+        inputs[BASE_INPUT_SIZE + 1] = np.cos(phase)
 
         # Recurrent NN forward pass
         h = act_fn(np.dot(inputs, W_in) + np.dot(h, W_rec))  # recurrent update
@@ -126,12 +134,13 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
         # Apply controls
         data.ctrl[:] = ctrl_state
         mj_step(model, data)
-        
-        positions.append(to_track[0].xpos[1])
+
+        positions[t] = to_track[0].xpos[1]
 
     # Fitness = final y-position 
     final_y = to_track[0].xpos[1]
-    return final_y, np.array(positions)
+    return final_y, positions
+
 
 
 # -----------------------
@@ -139,10 +148,21 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
 # -----------------------
 def evaluate_factory(steps: int = SIMULATION_STEPS, activation: str = "tanh"):
     """Return an evaluation function configured with activation type."""
-    def evaluate(genome: torch.Tensor) -> float:
-        final_y, _ = run_simulation(genome, steps=steps, activation=activation)
-        return final_y
+    def evaluate(genomes: torch.Tensor) -> torch.Tensor:
+        # Wrap 1D tensors in a batch (available in evotorch)
+        if genomes.ndim == 1:
+            genomes = genomes.unsqueeze(0)
+
+        fitnesses = []
+        for genome in genomes:
+            final_y, _ = run_simulation(genome, steps=steps, activation=activation)
+            fitnesses.append(float(final_y))  # ensure plain Python float
+
+        # Use as_tensor instead of tensor to avoid warnings
+        return torch.as_tensor(fitnesses, dtype=torch.float32)
+
     return evaluate
+
 
 
 # -----------------------
@@ -160,6 +180,7 @@ def run_evolution(
         solution_length=GENOME_SIZE,
         dtype=torch.float32,
         initial_bounds=(-INITIAL_WEIGHT_RANGE, INITIAL_WEIGHT_RANGE),
+        vectorized=True, # Turn on for 2D tensor batching
     )
 
     searcher = CMAES(

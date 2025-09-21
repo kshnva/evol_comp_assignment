@@ -10,11 +10,6 @@ import Fred_analysis
 import logging
 logging.getLogger("evotorch").setLevel(logging.WARNING)
 
-#Test speed
-SEED = 42
-np.random.seed(SEED)
-random.seed(SEED)
-
 
 if __name__ == "__main__":
     runs = 3

@@ -15,7 +15,7 @@ from mujoco import viewer
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
-from gecko_random import evolve_random
+from gecko_random import evolve_random, rollout, build_world_and_model
 
 # Turn off evotorch spam messages
 import logging
@@ -444,7 +444,6 @@ if __name__ == "__main__":
     best_population_rand = random_populations[best_random_run_idx]
 
     # Build world once for evaluation
-    from gecko_random import rollout, build_world_and_model
     model, data, to_track, init_qpos, init_qvel = build_world_and_model()
 
     fitnesses_rand = []

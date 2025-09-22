@@ -4,9 +4,9 @@ import numpy as np
 import time
 import torch
 import Fred_analysis
-
+import matplotlib.pyplot as plt 
 from Mika_evotorch_CMAES import run_evolution, run_simulation, run_best_genome
-
+import Kush_additional_analysis
 # Turn off evotorch spam messages
 import logging
 logging.getLogger("evotorch").setLevel(logging.WARNING)
@@ -56,11 +56,19 @@ if __name__ == "__main__":
     # Select the best tanh run for velocity
     if best_tanh_genome is None:
         raise RuntimeError("No valid tanh genome found")
-    _, best_tanh_traj = run_simulation(
+    _, best_tanh_traj,z_pos_tanh, actuator_vel_tanh= run_simulation(
         genome=best_tanh_genome,
         steps=steps,
         activation="tanh")
     np.save("results/best_tanh_traj.npy", best_tanh_traj)
+    # bouncy_metric_tanh, fig_bounce_tanh = Kush_additional_analysis.analyze_bounciness_fft(
+    #     positions_z=z_pos_tanh,
+    #     dt=0.01,
+    #     high_freq_cutoff=1.0
+    # )
+    # print(f"Tanh bounciness metric: {bouncy_metric_tanh:.3f}")
+    # fig_bounce_tanh.savefig("results/bounciness_tanh.png")
+
 
     # Run sigmoid experiments
     sigmoid_durations = []
@@ -93,12 +101,48 @@ if __name__ == "__main__":
     # Select the best sigmoid run for velocity
     if best_sigmoid_genome is None:
         raise RuntimeError("No valid sigmoid genome found")
-    _, best_sigmoid_traj = run_simulation(
+    _, best_sigmoid_traj,z_pos_sigmoid, actuator_vel_sigmoid = run_simulation(
         genome=best_sigmoid_genome,
         steps=steps,
         activation="sigmoid")
     np.save("results/best_sigmoid_traj.npy", best_sigmoid_traj)
 
+    positions_list = [z_pos_tanh, z_pos_sigmoid]
+    labels = ["Tanh", "Sigmoid"]
+
+    bouncy_metrics, fig = Kush_additional_analysis.analyze_bounciness_fft(
+        positions_z_list=positions_list,
+        dt=0.01,
+        high_freq_cutoff=1.0,
+        labels=labels
+    )
+
+    for label, metric in zip(labels, bouncy_metrics):
+        print(f"{label} bounciness metric: {metric:.3f}")
+
+    fig.savefig("results/bounciness_comparison.png")
+    plt.show()
+    actuator_labels = [f"Actuator {i+1}" for i in range(actuator_vel_tanh.shape[1])]
+    vel_usage_tanh, fig_act_tanh = Kush_additional_analysis.analyze_actuator_usage(
+        actuator_vel_history=actuator_vel_tanh,
+        labels=actuator_labels
+    )
+    vel_usage_sigmoid, fig_act_sigmoid = Kush_additional_analysis.analyze_actuator_usage(
+        actuator_vel_history=actuator_vel_sigmoid,
+        labels=actuator_labels
+    )
+
+    print("Tanh actuator usage:", vel_usage_tanh)
+    print("Sigmoid actuator usage:", vel_usage_sigmoid)
+    total_usage_tanh = np.sum(vel_usage_tanh)
+    total_usage_sigmoid = np.sum(vel_usage_sigmoid)
+
+    print("Total actuator usage (Tanh):", total_usage_tanh)
+    print("Total actuator usage (Sigmoid):", total_usage_sigmoid)
+
+
+    fig_act_tanh.savefig("results/actuator_usage_tanh.png")
+    fig_act_sigmoid.savefig("results/actuator_usage_sigmoid.png")
     # Convert to arrays
     tanh_histories = np.array(tanh_histories)
     sigmoid_histories = np.array(sigmoid_histories)

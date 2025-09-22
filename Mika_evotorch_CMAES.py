@@ -107,10 +107,10 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
 
     # For recording velocity
     positions = np.empty(steps)
-
+    z_positions = np.empty(steps)
     # Preallocate input buffer instead of concatinate
     inputs = np.empty(INPUT_SIZE)
-
+    acutator_vel_history = np.empty((steps, OUTPUT_SIZE))
     # Simulation loop
     for t in range(steps):
         # Normalize qpos inputs
@@ -127,16 +127,19 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, activation: str = "ta
 
         # Update actuator states incrementally
         ctrl_state = velocity_to_target(ctrl_state, raw_outputs)
-
+ 
         # Apply controls
         data.ctrl[:] = ctrl_state
+        velocity = raw_outputs*MAX_VELOCITY
+        acutator_vel_history[t, :]= velocity
         mj_step(model, data)
 
         positions[t] = to_track[0].xpos[1]
+        z_positions[t] = to_track[0].xpos[2]
 
     # Fitness = final y-position 
     final_y = to_track[0].xpos[1]
-    return final_y, positions
+    return final_y, positions, z_positions,acutator_vel_history
 
 
 
@@ -152,7 +155,7 @@ def evaluate_factory(steps: int = SIMULATION_STEPS, activation: str = "tanh"):
 
         fitnesses = []
         for genome in genomes:
-            final_y, _ = run_simulation(genome, steps=steps, activation=activation)
+            final_y, _ , _,_= run_simulation(genome, steps=steps, activation=activation)
             fitnesses.append(float(final_y))  # ensure plain Python float
 
         # Use as_tensor instead of tensor to avoid warnings

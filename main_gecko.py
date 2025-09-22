@@ -3,9 +3,9 @@
 import numpy as np
 import time
 import torch
-import Fred_analysis
+import analysis_gecko
 
-from Mika_evotorch_CMAES import run_evolution, run_simulation, run_best_genome
+from CMAES_gecko import run_evolution, run_simulation, run_best_genome
 
 # Turn off evotorch spam messages
 import logging
@@ -15,8 +15,8 @@ logging.getLogger("evotorch").setLevel(logging.WARNING)
 if __name__ == "__main__":
     runs = 3
     generations = 10
-    steps = 200
-    vel_step = 20 # Every ... steps to record velocity (too small will not show)
+    steps = 100
+    vel_step = 10 # Every ... steps to record velocity (too small will not show)
     show_plots = True  # Toggle to show plots
 
     tanh_histories = []
@@ -107,10 +107,10 @@ if __name__ == "__main__":
     print("Sigmoid trajectory length:", len(best_sigmoid_traj))
 
     # Run analysis on sigmoid and tanh
-    fig1 = Fred_analysis.plot_individual_runs(tanh_histories, "Tanh")
-    fig2 = Fred_analysis.plot_individual_runs(sigmoid_histories, "Sigmoid")
-    fig3 = Fred_analysis.plot_average_sig_tanh(tanh_histories, sigmoid_histories)
-    fig4 = Fred_analysis.plot_velocity(best_tanh_traj, best_sigmoid_traj, vel_step)
+    fig1 = analysis_gecko.plot_individual_runs(tanh_histories, "Tanh")
+    fig2 = analysis_gecko.plot_individual_runs(sigmoid_histories, "Sigmoid")
+    fig3 = analysis_gecko.plot_average_sig_tanh(tanh_histories, sigmoid_histories)
+    fig4 = analysis_gecko.plot_velocity(best_tanh_traj, best_sigmoid_traj, vel_step)
 
     # Save plots
     fig1.savefig(f"results/tanh_individual_runs_gens{generations}_ste{steps}.png")

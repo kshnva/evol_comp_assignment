@@ -15,11 +15,13 @@ from mujoco import viewer
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
+from gecko_random import evolve_random
+
 # Turn off evotorch spam messages
 import logging
 logging.getLogger("evotorch").setLevel(logging.WARNING)
 
-# Reproducibility
+# Reproducibility test
 import random
 np.random.seed(42)
 torch.manual_seed(42)
@@ -28,11 +30,11 @@ random.seed(42)
 # -----------------------
 # Network architecture
 # -----------------------
-BASE_INPUT_SIZE = 15      # qpos values
-TIME_INPUTS = 2           # sin/cos of time
+BASE_INPUT_SIZE = 15
+TIME_INPUTS = 2
 INPUT_SIZE = BASE_INPUT_SIZE + TIME_INPUTS
 HIDDEN_SIZE = 8
-OUTPUT_SIZE = 8           # number of actuators (controls)
+OUTPUT_SIZE = 8 
 
 # Genome encodes W_in, W_rec, W_out
 GENOME_SIZE = INPUT_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*OUTPUT_SIZE
@@ -44,7 +46,7 @@ INITIAL_WEIGHT_RANGE = 1.0
 
 # Scaling parameters for velocity-based control
 MAX_VELOCITY = 0.05       # radians per simulation step
-MAX_ANGLE = np.pi / 2     # actuator limits
+MAX_ANGLE = np.pi / 2
 
 
 def decode_genome(genome: torch.Tensor):
@@ -85,6 +87,11 @@ def velocity_to_target(prev_ctrl: np.ndarray, raw_outputs: np.ndarray) -> np.nda
     new_ctrl = prev_ctrl + velocity
     return np.clip(new_ctrl, -MAX_ANGLE, MAX_ANGLE)
 
+# -----------------------
+# Compute velocity
+# -----------------------
+def compute_velocity(positions: np.ndarray) -> np.ndarray:
+    return np.diff(positions, prepend=positions[0])
 
 # -----------------------
 # Simulation function
@@ -172,6 +179,8 @@ def run_evolution(
     steps: int = SIMULATION_STEPS,
     act_func: str = "tanh"
 ):
+    """Run CMA-ES algorithm."""
+
     problem = Problem(
         "max",
         evaluate_function(steps=steps, act_func=act_func),
@@ -181,11 +190,7 @@ def run_evolution(
         vectorized=True,
     )
     
-    searcher = CMAES(
-        problem, 
-        popsize=popsize, 
-        stdev_init=0.5
-        )
+    searcher = CMAES(problem, popsize=popsize, stdev_init=0.5)
     
     fitness_history = []
     for _ in range(generations):
@@ -193,8 +198,9 @@ def run_evolution(
         best_fit = searcher.status["best_eval"]
         fitness_history.append(best_fit)
 
-    best_genome = searcher.status["best"].values
+    best_genome = searcher.status["best"].values.clone().detach()
     return best_genome, fitness_history
+
 
 
 # -----------------------
@@ -271,49 +277,198 @@ def plot_individual_run(fitness_history: list[float], activation: str):
     return fig
 
 
-def tanh_vs_sigmoid():
-    """Runs a tanh vs sigmoid evaluation over several runs."""
-    return
+def plot_average(histories_tanh: np.ndarray, histories_sigmoid: np.ndarray):
+    """Plot average and min/max envelopes for tanh vs sigmoid runs and return the figure."""
+
+    def _plot_average(histories, label, color):
+        mean_curve = histories.mean(axis=0)
+        min_curve = histories.min(axis=0)
+        max_curve = histories.max(axis=0)
+        ax.plot(mean_curve, label=f"{label} mean", color=color)
+        ax.fill_between(
+            range(len(mean_curve)),
+            min_curve,
+            max_curve,
+            color=color,
+            alpha=0.2
+        )
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    _plot_average(histories_tanh, "Tanh", "red")
+    _plot_average(histories_sigmoid, "Sigmoid", "blue")
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best Fitness (final y)")
+    ax.set_title("Average Fitness Comparison")
+    ax.legend()
+    ax.grid(True)
+
+    return fig
+
+
+def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories):
+    """Plot mean ± stdev curves for Random EA, CMA-ES, and Algorithm 3."""
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    gens = np.arange(random_histories.shape[1])
+
+    def _plot(histories, label, color):
+        mean_curve = histories.mean(axis=0)
+        std_curve = histories.std(axis=0)
+        ax.plot(gens, mean_curve, label=label, color=color)
+        ax.fill_between(gens,
+                        mean_curve - std_curve,
+                        mean_curve + std_curve,
+                        color=color,
+                        alpha=0.2)
+
+    _plot(random_histories, "Random EA", "gray")
+    _plot(cmaes_histories, "CMA-ES", "blue")
+    _plot(algo3_histories, "Algorithm 3 (placeholder)", "green")
+
+    ax.set_xlabel("Generation")
+    ax.set_ylabel("Best Fitness (final y)")
+    ax.set_title("Algorithm Comparison")
+    ax.legend()
+    ax.grid(True)
+    return fig
+
+
+def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
+    """Run tanh vs sigmoid experiments, plot comparison, and return the figure."""
+    tanh_histories = []
+    sigmoid_histories = []
+
+    # Run tanh experiments
+    for i in range(runs):
+        print(f"[tanh] Run {i+1}/{runs}")
+        _, fitness_history = run_evolution(
+            generations=generations,
+            popsize=popsize,
+            steps=steps,
+            act_func="tanh",
+        )
+        tanh_histories.append(fitness_history)
+
+    # Run sigmoid experiments
+    for i in range(runs):
+        print(f"[sigmoid] Run {i+1}/{runs}")
+        _, fitness_history = run_evolution(
+            generations=generations,
+            popsize=popsize,
+            steps=steps,
+            act_func="sigmoid",
+        )
+        sigmoid_histories.append(fitness_history)
+
+    # Convert to arrays
+    tanh_histories = np.array(tanh_histories)
+    sigmoid_histories = np.array(sigmoid_histories)
+
+    # Save results
+    np.save("tanh_histories.npy", tanh_histories)
+    np.save("sigmoid_histories.npy", sigmoid_histories)
+    print("Saved tanh_histories.npy and sigmoid_histories.npy")
+
+    # Plot and return figure
+    fig = plot_average(tanh_histories, sigmoid_histories)
+    return fig
 
 
 if __name__ == "__main__":
     generations = GENERATIONS
     steps = SIMULATION_STEPS
-    activation = "tanh" # options: "tanh", "sigmoid"
+    activation = "tanh"  # options: "tanh", "sigmoid"
+    runs = 3
+    popsize = POPULATION_SIZE
 
-    # Run the evolutionary algorithm
-    genome, fitness_history = run_evolution(
+    # Storage for histories
+    random_histories = []
+    cmaes_histories = []
+    algo3_histories = []
+
+    # Storage for populations (final runs)
+    random_populations = []
+    cmaes_genomes = []
+    algo3_genomes = []
+
+    # -----------------------
+    # Run multiple experiments
+    # -----------------------
+    for r in range(runs):
+        print(f"\n=== Run {r+1}/{runs} ===")
+
+        # Random EA
+        population_rand, history_rand = evolve_random(
             generations=generations,
-            popsize=10,
+            pop_size=popsize,
             steps=steps,
-            act_func=activation
         )
-    
-    final_fitness = fitness_history[-1]
+        random_histories.append(history_rand)
+        random_populations.append(population_rand)
 
-    # Simulate the velocity
-    _, trajectory_vel = run_simulation(
-            genome=genome,
+        # CMA-ES
+        genome_cmaes, history_cmaes = run_evolution(
+            generations=generations,
+            popsize=popsize,
             steps=steps,
-            act_func=activation
+            act_func=activation,
         )
-    np.save(f"results/best_{activation}_traj.npy", trajectory_vel)
+        cmaes_histories.append(history_cmaes)
+        cmaes_genomes.append(genome_cmaes)
 
-    # Change later for multiple runs
-    histories = fitness_history
+        # Placeholder Algorithm 3 (same as CMA-ES)
+        genome_algo3, history_algo3 = run_evolution(
+            generations=generations,
+            popsize=popsize,
+            steps=steps,
+            act_func=activation,
+        )
+        algo3_histories.append(history_algo3)
+        algo3_genomes.append(genome_algo3)
 
-    # convert to array
-    histories = np.array(histories)
+    # Convert to arrays (runs * generations)
+    random_histories = np.array(random_histories)
+    cmaes_histories = np.array(cmaes_histories)
+    algo3_histories = np.array(algo3_histories)
 
-    # Run and save analysis
-    fig1 = plot_individual_run(fitness_history, activation)
-    fig1.savefig(f"results/{activation}_individual_runs_gens{generations}_steps{steps}.png")
+    # Save results
+    np.save("results/random_histories.npy", random_histories)
+    np.save("results/cmaes_histories.npy", cmaes_histories)
+    np.save("results/algo3_histories.npy", algo3_histories)
 
-    # Show plots
+    # -----------------------
+    # Find best genome per algorithm
+    # -----------------------
+    # Random EA
+    best_random_run_idx = np.argmax([max(h) for h in random_histories])
+    best_population_rand = random_populations[best_random_run_idx]
+
+    # Build world once for evaluation
+    from gecko_random import rollout, build_world_and_model
+    model, data, to_track, init_qpos, init_qvel = build_world_and_model()
+
+    fitnesses_rand = []
+    for genome in best_population_rand:
+        fitness, _ = rollout(genome, model, data, to_track, init_qpos, init_qvel, steps=steps)
+        fitnesses_rand.append(fitness)
+    best_random = best_population_rand[np.argmax(fitnesses_rand)]
+
+    # CMA-ES
+    best_cmaes_idx = np.argmax([max(h) for h in cmaes_histories])
+    best_cmaes = cmaes_genomes[best_cmaes_idx]
+
+    # Algo3 placeholder
+    best_algo3_idx = np.argmax([max(h) for h in algo3_histories])
+    best_algo3 = algo3_genomes[best_algo3_idx]
+
+    # -----------------------
+    # Plot comparison
+    # -----------------------
+    fig = plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories)
+    fig.savefig("results/algorithms_comparison.png")
     plt.show()
 
-    # Show genome
-    run_best_genome(genome, act_func=activation)
-
-
-
+    # -----------------------
+    # Visualize best genome
+    # -----------------------
+    run_best_genome(best_cmaes, act_func=activation)

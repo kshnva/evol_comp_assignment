@@ -23,9 +23,9 @@ logging.getLogger("evotorch").setLevel(logging.WARNING)
 
 # Reproducibility test
 import random
-np.random.seed(42)
-torch.manual_seed(42)
-random.seed(42)
+# np.random.seed(42)
+# torch.manual_seed(42)
+# random.seed(42)
 
 # -----------------------
 # Network architecture
@@ -39,10 +39,10 @@ OUTPUT_SIZE = 8
 # Genome encodes W_in, W_rec, W_out
 GENOME_SIZE = INPUT_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*OUTPUT_SIZE
 
-POPULATION_SIZE = 10
-GENERATIONS = 100
-SIMULATION_STEPS = 1000  
-INITIAL_WEIGHT_RANGE = 1.0
+POPULATION_SIZE = 80
+GENERATIONS = 150
+SIMULATION_STEPS = 5000 
+INITIAL_WEIGHT_RANGE = 0.8
 
 # Scaling parameters for velocity-based control
 MAX_VELOCITY = 0.05       # radians per simulation step
@@ -196,7 +196,7 @@ def run_cmaes_evolution(
         vectorized=True,
     )
     
-    searcher = CMAES(problem, popsize=popsize, stdev_init=0.5, separable=diagonal_version)
+    searcher = CMAES(problem, popsize=popsize, stdev_init=0.2, separable=diagonal_version)
     
     fitness_history = []
     for gen in range(generations):

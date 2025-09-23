@@ -40,8 +40,8 @@ OUTPUT_SIZE = 8
 GENOME_SIZE = INPUT_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*OUTPUT_SIZE
 
 POPULATION_SIZE = 10
-GENERATIONS = 10
-SIMULATION_STEPS = 100   # shorter for testing (can increase)
+GENERATIONS = 100
+SIMULATION_STEPS = 1000  
 INITIAL_WEIGHT_RANGE = 1.0
 
 # Scaling parameters for velocity-based control
@@ -173,13 +173,19 @@ def evaluate_function(steps: int = SIMULATION_STEPS, act_func: str = "tanh"):
 # -----------------------
 # EvoTorch runner
 # -----------------------
-def run_evolution(
+def run_cmaes_evolution(
     generations: int = GENERATIONS,
     popsize: int = POPULATION_SIZE,
     steps: int = SIMULATION_STEPS,
-    act_func: str = "tanh"
+    act_func: str = "tanh",
+    diagonal_version: bool = False
 ):
-    """Run CMA-ES algorithm."""
+    """Run one of the two versions of the CMA-ES algorithm, return best genome and fitness history.
+    
+    The two versions are:
+    - diagonal_version=True: separable CMA-ES (diagonal covariance matrix)
+    - diagonal_version=False: full CMA-ES (full covariance matrix)
+    """
 
     problem = Problem(
         "max",
@@ -190,13 +196,17 @@ def run_evolution(
         vectorized=True,
     )
     
-    searcher = CMAES(problem, popsize=popsize, stdev_init=0.5)
+    searcher = CMAES(problem, popsize=popsize, stdev_init=0.5, separable=diagonal_version)
     
     fitness_history = []
-    for _ in range(generations):
+    for gen in range(generations):
         searcher.step()
         best_fit = searcher.status["best_eval"]
         fitness_history.append(best_fit)
+        if diagonal_version:
+            print(f"[CMA-ES (Diagonal)] Gen {gen+1}/{generations} | Best Y: {best_fit:.4f} | Mean: {np.mean(fitness_history):.4f}")
+        else:
+            print(f"[CMA-ES] Gen {gen+1}/{generations} | Best Y: {best_fit:.4f} | Mean: {np.mean(fitness_history):.4f}")
 
     best_genome = searcher.status["best"].values.clone().detach()
     return best_genome, fitness_history
@@ -305,7 +315,7 @@ def plot_average(histories_tanh: np.ndarray, histories_sigmoid: np.ndarray):
     return fig
 
 
-def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories):
+def plot_algorithms_comparison(random_histories, cmaes_histories, cmaes_diag_histories):
     """Plot mean ± stdev curves for Random EA, CMA-ES, and Algorithm 3."""
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -323,7 +333,7 @@ def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_historie
 
     _plot(random_histories, "Random EA", "gray")
     _plot(cmaes_histories, "CMA-ES", "blue")
-    _plot(algo3_histories, "Algorithm 3 (placeholder)", "green")
+    _plot(cmaes_diag_histories, "CMA-ES (Diagonal)", "green")
 
     ax.set_xlabel("Generation")
     ax.set_ylabel("Best Fitness (final y)")
@@ -341,7 +351,7 @@ def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
     # Run tanh experiments
     for i in range(runs):
         print(f"[tanh] Run {i+1}/{runs}")
-        _, fitness_history = run_evolution(
+        _, fitness_history = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
@@ -352,7 +362,7 @@ def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
     # Run sigmoid experiments
     for i in range(runs):
         print(f"[sigmoid] Run {i+1}/{runs}")
-        _, fitness_history = run_evolution(
+        _, fitness_history = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
@@ -384,12 +394,12 @@ if __name__ == "__main__":
     # Storage for histories
     random_histories = []
     cmaes_histories = []
-    algo3_histories = []
+    cmaes_diag_histories = []
 
     # Storage for populations (final runs)
     random_populations = []
     cmaes_genomes = []
-    algo3_genomes = []
+    cmaes_diag_genomes = []
 
     # -----------------------
     # Run multiple experiments
@@ -407,34 +417,36 @@ if __name__ == "__main__":
         random_populations.append(population_rand)
 
         # CMA-ES
-        genome_cmaes, history_cmaes = run_evolution(
+        genome_cmaes, history_cmaes = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
             act_func=activation,
+            diagonal_version=False  # full CMA-ES
         )
         cmaes_histories.append(history_cmaes)
         cmaes_genomes.append(genome_cmaes)
 
-        # Placeholder Algorithm 3 (same as CMA-ES)
-        genome_algo3, history_algo3 = run_evolution(
+        # CMA-ES diagonal variant
+        genome_cmaes_diag, history_cmaes_diag = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
             act_func=activation,
+            diagonal_version=True  # using separable CMA-ES
         )
-        algo3_histories.append(history_algo3)
-        algo3_genomes.append(genome_algo3)
+        cmaes_diag_histories.append(history_cmaes_diag)
+        cmaes_diag_genomes.append(genome_cmaes_diag)
 
     # Convert to arrays (runs * generations)
     random_histories = np.array(random_histories)
     cmaes_histories = np.array(cmaes_histories)
-    algo3_histories = np.array(algo3_histories)
+    cmaes_diag_histories = np.array(cmaes_diag_histories)
 
     # Save results
     np.save("results/random_histories.npy", random_histories)
     np.save("results/cmaes_histories.npy", cmaes_histories)
-    np.save("results/algo3_histories.npy", algo3_histories)
+    np.save("results/cmaes_diag_histories.npy", cmaes_diag_histories)
 
     # -----------------------
     # Find best genome per algorithm
@@ -456,14 +468,14 @@ if __name__ == "__main__":
     best_cmaes_idx = np.argmax([max(h) for h in cmaes_histories])
     best_cmaes = cmaes_genomes[best_cmaes_idx]
 
-    # Algo3 placeholder
-    best_algo3_idx = np.argmax([max(h) for h in algo3_histories])
-    best_algo3 = algo3_genomes[best_algo3_idx]
+    # CMA-ES (using separable CMA-ES)
+    best_cmaes_diag_idx = np.argmax([max(h) for h in cmaes_diag_histories])
+    best_cmaes_diag = cmaes_diag_genomes[best_cmaes_diag_idx]
 
     # -----------------------
     # Plot comparison
     # -----------------------
-    fig = plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories)
+    fig = plot_algorithms_comparison(random_histories, cmaes_histories, cmaes_diag_histories)
     fig.savefig("results/algorithms_comparison.png")
     plt.show()
 

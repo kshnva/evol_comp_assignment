@@ -23,9 +23,10 @@ logging.getLogger("evotorch").setLevel(logging.WARNING)
 
 # Reproducibility test
 import random
-np.random.seed(42)
-torch.manual_seed(42)
-random.seed(42)
+from tqdm import tqdm
+# np.random.seed(42)
+# torch.manual_seed(42)
+# random.seed(42)
 
 # -----------------------
 # Network architecture
@@ -39,10 +40,10 @@ OUTPUT_SIZE = 8
 # Genome encodes W_in, W_rec, W_out
 GENOME_SIZE = INPUT_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*OUTPUT_SIZE
 
-POPULATION_SIZE = 10
-GENERATIONS = 10
-SIMULATION_STEPS = 100   # shorter for testing (can increase)
-INITIAL_WEIGHT_RANGE = 1.0
+POPULATION_SIZE = 60
+GENERATIONS = 1000
+SIMULATION_STEPS = 7500 
+INITIAL_WEIGHT_RANGE = 0.8
 
 # Scaling parameters for velocity-based control
 MAX_VELOCITY = 0.05       # radians per simulation step
@@ -96,7 +97,7 @@ def compute_velocity(positions: np.ndarray) -> np.ndarray:
 # -----------------------
 # Simulation function
 # -----------------------
-def run_simulation(genome: torch.Tensor, steps: int = 500, act_func: str = "tanh") -> float:
+def run_simulation(genome: torch.Tensor, steps: int = 500, act_func: str = "tanh", collect_data: bool = False):
     """Run simulation with recurrent NN controller (velocity-based)."""
     world = SimpleFlatWorld()
     gecko_core = gecko()
@@ -121,6 +122,12 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, act_func: str = "tanh
     activation = tanh if act_func == "tanh" else sigmoid
     positions = np.empty(steps)
     inputs = np.empty(INPUT_SIZE)
+    
+    # Data collection arrays
+    if collect_data:
+        velocities = np.empty(steps)
+        actuator_efforts = np.empty(steps)
+        time_array = np.empty(steps)
 
     # Simulation loop
     for t in range(steps):
@@ -144,10 +151,26 @@ def run_simulation(genome: torch.Tensor, steps: int = 500, act_func: str = "tanh
         mj_step(model, data)
 
         positions[t] = to_track[0].xpos[1]
+        
+        # Collect additional data if requested
+        if collect_data:
+            # Calculate velocity (change in position)
+            if t > 0:
+                velocities[t] = positions[t] - positions[t-1]
+            else:
+                velocities[t] = 0.0
+            
+            # Calculate actuator effort (sum of squared control values)
+            actuator_efforts[t] = np.sum(np.square(data.ctrl))
+            time_array[t] = t * (1.0 / 60.0)  # Assuming 60 Hz simulation
 
     # Fitness = final y-position
     final_y = to_track[0].xpos[1]
-    return final_y, positions
+    
+    if collect_data:
+        return final_y, positions, velocities, actuator_efforts, time_array
+    else:
+        return final_y, positions
 
 
 # -----------------------
@@ -161,8 +184,8 @@ def evaluate_function(steps: int = SIMULATION_STEPS, act_func: str = "tanh"):
 
         fitnesses = []
         for genome in genomes:
-            final_y, _ = run_simulation(
-                genome, steps=steps, act_func=act_func)
+            result = run_simulation(genome, steps=steps, act_func=act_func, collect_data=False)
+            final_y = result[0]  # Extract fitness from tuple
             fitnesses.append(float(final_y))
 
         return torch.as_tensor(fitnesses, dtype=torch.float32)
@@ -173,13 +196,19 @@ def evaluate_function(steps: int = SIMULATION_STEPS, act_func: str = "tanh"):
 # -----------------------
 # EvoTorch runner
 # -----------------------
-def run_evolution(
+def run_cmaes_evolution(
     generations: int = GENERATIONS,
     popsize: int = POPULATION_SIZE,
     steps: int = SIMULATION_STEPS,
-    act_func: str = "tanh"
+    act_func: str = "tanh",
+    diagonal_version: bool = False
 ):
-    """Run CMA-ES algorithm."""
+    """Run one of the two versions of the CMA-ES algorithm, return best genome and fitness history.
+    
+    The two versions are:
+    - diagonal_version=True: separable CMA-ES (diagonal covariance matrix)
+    - diagonal_version=False: full CMA-ES (full covariance matrix)
+    """
 
     problem = Problem(
         "max",
@@ -190,13 +219,18 @@ def run_evolution(
         vectorized=True,
     )
     
-    searcher = CMAES(problem, popsize=popsize, stdev_init=0.5)
+    searcher = CMAES(problem, popsize=popsize, stdev_init=0.2, separable=diagonal_version)
     
     fitness_history = []
-    for _ in range(generations):
+    for gen in tqdm(range(generations), 
+                    desc="CMA-ES Generations" if not diagonal_version else "CMA-ES (Diagonal) Generations"):
         searcher.step()
         best_fit = searcher.status["best_eval"]
         fitness_history.append(best_fit)
+        # if diagonal_version:
+        #     print(f"[CMA-ES (Diagonal)] Gen {gen+1}/{generations} | Best Y: {best_fit:.4f} | Mean: {np.mean(fitness_history):.4f}")
+        # else:
+        #     print(f"[CMA-ES] Gen {gen+1}/{generations} | Best Y: {best_fit:.4f} | Mean: {np.mean(fitness_history):.4f}")
 
     best_genome = searcher.status["best"].values.clone().detach()
     return best_genome, fitness_history
@@ -305,7 +339,7 @@ def plot_average(histories_tanh: np.ndarray, histories_sigmoid: np.ndarray):
     return fig
 
 
-def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories):
+def plot_algorithms_comparison(random_histories, cmaes_histories, cmaes_diag_histories):
     """Plot mean ± stdev curves for Random EA, CMA-ES, and Algorithm 3."""
 
     fig, ax = plt.subplots(figsize=(8, 5))
@@ -323,7 +357,7 @@ def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_historie
 
     _plot(random_histories, "Random EA", "gray")
     _plot(cmaes_histories, "CMA-ES", "blue")
-    _plot(algo3_histories, "Algorithm 3 (placeholder)", "green")
+    _plot(cmaes_diag_histories, "CMA-ES (Diagonal)", "green")
 
     ax.set_xlabel("Generation")
     ax.set_ylabel("Best Fitness (final y)")
@@ -331,6 +365,27 @@ def plot_algorithms_comparison(random_histories, cmaes_histories, algo3_historie
     ax.legend()
     ax.grid(True)
     return fig
+
+
+def collect_detailed_data(genome, steps, act_func, filename):
+    """Collect detailed velocity and effort data from a genome and save to NPZ file."""
+    import os
+    
+    # Ensure results directory exists
+    os.makedirs("results", exist_ok=True)
+    
+    print(f"Collecting detailed data for {filename}...")
+    result = run_simulation(genome, steps=steps, act_func=act_func, collect_data=True)
+    final_y, positions, velocities, actuator_efforts, time_array = result
+    
+    # Save to NPZ file
+    np.savez(f"results/{filename}.npz",
+             time=time_array,
+             positions=positions,
+             velocities=velocities,
+             actuator_efforts=actuator_efforts,
+             final_fitness=final_y)
+    print(f"Saved detailed data to results/{filename}.npz")
 
 
 def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
@@ -341,7 +396,7 @@ def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
     # Run tanh experiments
     for i in range(runs):
         print(f"[tanh] Run {i+1}/{runs}")
-        _, fitness_history = run_evolution(
+        _, fitness_history = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
@@ -352,7 +407,7 @@ def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
     # Run sigmoid experiments
     for i in range(runs):
         print(f"[sigmoid] Run {i+1}/{runs}")
-        _, fitness_history = run_evolution(
+        _, fitness_history = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
@@ -375,6 +430,11 @@ def tanh_vs_sigmoid(runs=5, generations=10, steps=2000, popsize=10):
 
 
 if __name__ == "__main__":
+    import os
+    
+    # Ensure results directory exists
+    os.makedirs("results", exist_ok=True)
+    
     generations = GENERATIONS
     steps = SIMULATION_STEPS
     activation = "tanh"  # options: "tanh", "sigmoid"
@@ -384,12 +444,12 @@ if __name__ == "__main__":
     # Storage for histories
     random_histories = []
     cmaes_histories = []
-    algo3_histories = []
+    cmaes_diag_histories = []
 
     # Storage for populations (final runs)
     random_populations = []
     cmaes_genomes = []
-    algo3_genomes = []
+    cmaes_diag_genomes = []
 
     # -----------------------
     # Run multiple experiments
@@ -407,34 +467,36 @@ if __name__ == "__main__":
         random_populations.append(population_rand)
 
         # CMA-ES
-        genome_cmaes, history_cmaes = run_evolution(
+        genome_cmaes, history_cmaes = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
             act_func=activation,
+            diagonal_version=False  # full CMA-ES
         )
         cmaes_histories.append(history_cmaes)
         cmaes_genomes.append(genome_cmaes)
 
-        # Placeholder Algorithm 3 (same as CMA-ES)
-        genome_algo3, history_algo3 = run_evolution(
+        # CMA-ES diagonal variant
+        genome_cmaes_diag, history_cmaes_diag = run_cmaes_evolution(
             generations=generations,
             popsize=popsize,
             steps=steps,
             act_func=activation,
+            diagonal_version=True  # using separable CMA-ES
         )
-        algo3_histories.append(history_algo3)
-        algo3_genomes.append(genome_algo3)
+        cmaes_diag_histories.append(history_cmaes_diag)
+        cmaes_diag_genomes.append(genome_cmaes_diag)
 
     # Convert to arrays (runs * generations)
     random_histories = np.array(random_histories)
     cmaes_histories = np.array(cmaes_histories)
-    algo3_histories = np.array(algo3_histories)
+    cmaes_diag_histories = np.array(cmaes_diag_histories)
 
     # Save results
     np.save("results/random_histories.npy", random_histories)
     np.save("results/cmaes_histories.npy", cmaes_histories)
-    np.save("results/algo3_histories.npy", algo3_histories)
+    np.save("results/cmaes_diag_histories.npy", cmaes_diag_histories)
 
     # -----------------------
     # Find best genome per algorithm
@@ -456,14 +518,24 @@ if __name__ == "__main__":
     best_cmaes_idx = np.argmax([max(h) for h in cmaes_histories])
     best_cmaes = cmaes_genomes[best_cmaes_idx]
 
-    # Algo3 placeholder
-    best_algo3_idx = np.argmax([max(h) for h in algo3_histories])
-    best_algo3 = algo3_genomes[best_algo3_idx]
+    # CMA-ES (using separable CMA-ES)
+    best_cmaes_diag_idx = np.argmax([max(h) for h in cmaes_diag_histories])
+    best_cmaes_diag = cmaes_diag_genomes[best_cmaes_diag_idx]
 
+    # -----------------------
+    # Collect detailed data from best genomes
+    # -----------------------
+    print("\n=== Collecting detailed data ===")
+    collect_detailed_data(best_cmaes, steps, activation, "best_cmaes_data")
+    collect_detailed_data(best_cmaes_diag, steps, activation, "best_cmaes_diag_data")
+    
+    # For random EA, we need to convert the genome format
+    # The random EA uses a different genome structure, so we'll collect from CMA-ES only for now
+    
     # -----------------------
     # Plot comparison
     # -----------------------
-    fig = plot_algorithms_comparison(random_histories, cmaes_histories, algo3_histories)
+    fig = plot_algorithms_comparison(random_histories, cmaes_histories, cmaes_diag_histories)
     fig.savefig("results/algorithms_comparison.png")
     plt.show()
 

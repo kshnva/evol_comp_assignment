@@ -3,6 +3,8 @@
 
 import numpy as np
 import mujoco
+from tqdm import tqdm
+
 from ariel.simulation.environments.simple_flat_world import SimpleFlatWorld
 from ariel.body_phenotypes.robogen_lite.prebuilt_robots.gecko import gecko
 
@@ -151,14 +153,14 @@ def evolve_random(generations=GENERATIONS, pop_size=POP_SIZE, steps=ROLLOUT_STEP
     population = initialize_population(genome_size, pop_size)
     fitness_history = []
 
-    for gen in range(generations):
+    for gen in tqdm(range(generations), desc="Random EA Generations"):
         results = [rollout(ind, model, data, to_track, init_qpos, init_qvel, steps=steps)
                    for ind in population]
         fitnesses = [r[0] for r in results]
 
         population, gen_best, gen_best_score = reproduce(population, np.array(fitnesses))
         fitness_history.append(gen_best_score)
-        print(f"[Random EA] Gen {gen+1}/{generations} | Best Y: {gen_best_score:.4f} | Mean: {np.mean(fitnesses):.4f}")
+        # print(f"[Random EA] Gen {gen+1}/{generations} | Best Y: {gen_best_score:.4f} | Mean: {np.mean(fitnesses):.4f}")
 
     return population, fitness_history
 

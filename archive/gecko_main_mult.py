@@ -28,6 +28,20 @@ from tqdm import tqdm
 # torch.manual_seed(42)
 # random.seed(42)
 
+import argparse
+
+# -------------------
+# Argument parsing
+# -------------------
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility")
+args = parser.parse_args()
+
+if args.seed is not None:
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    random.seed(args.seed)
+
 # -----------------------
 # Network architecture
 # -----------------------

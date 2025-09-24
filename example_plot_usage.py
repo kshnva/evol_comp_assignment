@@ -25,13 +25,13 @@ def main():
         print("\n=== Plotting Specific Algorithm Data ===")
         
         # Plot CMA-ES data
-        if os.path.exists("results/best_cmaes_data.npz"):
-            fig1 = plot_single_algorithm_data("results/best_cmaes_data.npz", "CMA-ES")
+        if os.path.exists("results/short_gen_150/best_cmaes_data.npz"):
+            fig1 = plot_single_algorithm_data("results/short_gen_150/best_cmaes_data.npz", "CMA-ES")
             plt.show()
         
         # Plot CMA-ES Diagonal data  
-        if os.path.exists("results/best_cmaes_diag_data.npz"):
-            fig2 = plot_single_algorithm_data("results/best_cmaes_diag_data.npz", "CMA-ES Diagonal")
+        if os.path.exists("results/short_gen_150/best_cmaes_diag_data.npz"):
+            fig2 = plot_single_algorithm_data("results/short_gen_150/best_cmaes_diag_data.npz", "CMA-ES Diagonal")
             plt.show()
             
     except FileNotFoundError as e:
@@ -42,8 +42,8 @@ def main():
     try:
         print("\n=== Custom Data Analysis ===")
         
-        if os.path.exists("results/best_cmaes_data.npz"):
-            data = load_detailed_data("results/best_cmaes_data.npz")
+        if os.path.exists("results/short_gen_150/best_cmaes_data.npz"):
+            data = load_detailed_data("results/short_gen_150/best_cmaes_data.npz")
             
             # Print some statistics
             print(f"Final fitness: {data['final_fitness']}")

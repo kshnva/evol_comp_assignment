@@ -1,3 +1,4 @@
+# module to generate the following plots from previously obtained data gecko_main. 
 # (1) average fitness across generations, to measure convergence efficiency; 
 # (2) velocity of the best individual over time, as an indicator of the quality of the locomotion that emerges
 # (3) actuator effort, reflecting the energy required to generate movement. 

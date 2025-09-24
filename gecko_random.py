@@ -1,5 +1,4 @@
-# gecko_random.py
-# Random evolutionary algorithm for Gecko NN controller (headless rollouts)
+# Random evolutionary algorithm for Gecko NN controller
 
 import numpy as np
 import mujoco

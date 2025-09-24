@@ -24,9 +24,6 @@ logging.getLogger("evotorch").setLevel(logging.WARNING)
 # Reproducibility test
 import random
 from tqdm import tqdm
-# np.random.seed(42)
-# torch.manual_seed(42)
-# random.seed(42)
 
 # -----------------------
 # Network architecture
@@ -40,6 +37,7 @@ OUTPUT_SIZE = 8
 # Genome encodes W_in, W_rec, W_out
 GENOME_SIZE = INPUT_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*HIDDEN_SIZE + HIDDEN_SIZE*OUTPUT_SIZE
 
+# These parameters will run for 6+ hours
 POPULATION_SIZE = 60
 GENERATIONS = 500
 SIMULATION_STEPS = 7500 
@@ -234,7 +232,6 @@ def run_cmaes_evolution(
 
     best_genome = searcher.status["best"].values.clone().detach()
     return best_genome, fitness_history
-
 
 
 # -----------------------

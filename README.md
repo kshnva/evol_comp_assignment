@@ -1,5 +1,6 @@
-# evol_comp_assignment
-This repo contains code for the A2 assignment of Evolutionary Computing (a VU master course). Description of the assignment can be found at 'A2_description.pdf'.
+# Evolutionary Computing - Gecko Locomotion Optimization
+
+Optimization of gecko locomotion gaits using evolutionary algorithms (CMA-ES) in a MuJoCo physics simulation environment. Developed for Assignment 2 of the Evolutionary Computing course at VU Amsterdam.
 
 ## Students
 This code is written by Shania Sinha, Bos Sprik, Kushnava Singha and Frederieke Loth.
